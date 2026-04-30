@@ -1,4 +1,4 @@
 variable "project_id" {
-  description = "Your Google Cloud Project ID"
+  description = "onyx-ai-stack-456789"
   type        = string
 }
