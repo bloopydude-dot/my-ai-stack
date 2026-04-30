@@ -1,6 +1,3 @@
-output "vm_public_ip" {
-  value = google_compute_instance.ai_stack.network_interface.access_config.0.nat_ip
-}
 terraform {
   required_providers {
     google = {
