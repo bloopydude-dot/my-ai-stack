@@ -1,0 +1,5 @@
+use_default_settings: true
+server:
+  secret_key: "change_this_to_something_random"
+search:
+  safe_search: 0
