@@ -19,7 +19,6 @@ resource "google_compute_instance" "ai_stack" {
 
   boot_disk {
     initialize_params {
-      # This is the 26.04 Arm64 image family
       image = "ubuntu-os-cloud/ubuntu-2404-lts-arm64" 
       size  = 100
     }
@@ -43,11 +42,12 @@ resource "google_compute_firewall" "allow_http_https" {
 
   allow {
     protocol = "tcp"
-    ports    = ["80", "443"]
+    ports    = ["80", "443", "81"]
   }
 
   source_ranges = ["0.0.0.0/0"]
   target_tags   = ["http-server", "https-server"]
 }
+
 
 
