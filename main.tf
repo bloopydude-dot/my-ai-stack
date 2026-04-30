@@ -1,53 +1,60 @@
-terraform {
-  required_providers {
-    google = {
-      source  = "hashicorp/google"
-      version = "~> 5.0"
-    }
-  }
-}
+services:
+  # --- PROXY & INFRA ---
+  nginx-proxy-manager:
+    image: 'jc21/nginx-proxy-manager:latest'
+    restart: always
+    ports: [ '80:80', '443:443', '81:81' ]
+    volumes: [ './npm/data:/data', './npm/letsencrypt:/etc/letsencrypt' ]
 
-provider "google" {
-  project = "onyx-ai-stack-456789"
-  region  = "us-central1"
-}
+  redis:
+    image: redis:7-alpine
+    restart: always
 
-resource "google_compute_instance" "ai_stack" {
-  name         = "ai-stack-arm"
-  machine_type = "t2a-standard-4"
-  zone         = "us-central1-a"
+  # --- ONYX FULL STACK ---
+  onyx-db:
+    image: postgres:15-alpine
+    environment: [ POSTGRES_PASSWORD=password ]
+    volumes: [ './onyx/db:/var/lib/postgresql/data' ]
 
-  boot_disk {
-    initialize_params {
-      image = "ubuntu-os-cloud/ubuntu-2404-lts-arm64" 
-      size  = 100
-    }
-  }
+  onyx-api:
+    image: onyxdotapp/onyx-backend:latest
+    depends_on: [onyx-db, redis]
+    environment: { POSTGRES_HOST: onyx-db, REDIS_HOST: redis }
 
-  network_interface {
-    network = "default"
-    access_config {
-      nat_ip = "34.72.193.181" 
-    }
-  }
+  onyx-web:
+    image: onyxdotapp/onyx-web:latest
+    depends_on: [onyx-api]
+    environment: { API_SERVER_HOST: onyx-api }
 
-  metadata_startup_script = file("startup.sh")
+  onyx-background:
+    image: onyxdotapp/onyx-backend:latest
+    command: python /app/onyx/background/worker.py
+    depends_on: [onyx-api]
+    environment: { POSTGRES_HOST: onyx-db, REDIS_HOST: redis }
 
-  tags = ["http-server", "https-server"]
-}
+  # --- SEARCH & AUTOMATION ---
+  n8n:
+    image: n8nio/n8n:latest
+    restart: always
+    volumes: [ './n8n/data:/home/node/.n8n' ]
 
-resource "google_compute_firewall" "allow_http_https" {
-  name    = "allow-http-https"
-  network = "default"
+  searxng:
+    image: searxng/searxng:latest
+    restart: always
+    volumes: [ './searxng/settings.yml:/etc/searxng/settings.yml:ro' ]
 
-  allow {
-    protocol = "tcp"
-    ports    = ["80", "443", "81"]
-  }
+  firecrawl:
+    image: firecrawl/firecrawl:latest
+    depends_on: [redis, searxng]
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - SEARXNG_BASE_URL=http://searxng:8080
 
-  source_ranges = ["0.0.0.0/0"]
-  target_tags   = ["http-server", "https-server"]
-}
+  # --- MONITORING ---
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    volumes: [ './uptime-kuma/data:/app/data' ]
 
-
-
+  dozzle:
+    image: amir20/dozzle:latest
+    volumes: [ '/var/run/docker.sock:/var/run/docker.sock' ]
