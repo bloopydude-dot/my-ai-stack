@@ -8,7 +8,7 @@ terraform {
 }
 
 provider "google" {
-  project = "YOUR_PROJECT_ID"
+  project = "onyx-ai-stack-456789"
   region  = "us-central1"
 }
 
