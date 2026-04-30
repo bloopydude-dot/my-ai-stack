@@ -19,7 +19,7 @@ resource "google_compute_instance" "onyx_vm" {
 
   boot_disk {
     initialize_params {
-      image = "ubuntu-os-cloud/ubuntu-2404-lts-arm64" 
+      image = "ubuntu-os-cloud/ubuntu-2604-lts-arm64" 
       size  = 100 
     }
   }
