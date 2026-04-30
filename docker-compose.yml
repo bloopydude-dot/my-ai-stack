@@ -1,12 +1,12 @@
 services:
-  # --- INFRASTRUCTURE ---
+  # --- ENTRY POINT & INFRA ---
   nginx-proxy-manager:
     image: 'jc21/nginx-proxy-manager:latest'
     restart: always
     ports:
       - '80:80'
       - '443:443'
-      - '81:81' # Admin UI
+      - '81:81'
     volumes:
       - ./npm/data:/data
       - ./npm/letsencrypt:/etc/letsencrypt
@@ -15,7 +15,7 @@ services:
     image: redis:7-alpine
     restart: always
 
-  # --- AI KNOWLEDGE BASE (ONYX) ---
+  # --- ONYX FULL STACK ---
   onyx-db:
     image: postgres:15-alpine
     environment:
@@ -23,21 +23,31 @@ services:
     volumes:
       - ./onyx/db:/var/lib/postgresql/data
 
-  onyx-web:
-    image: onyxdotapp/onyx-web:latest
-    depends_on:
-      - onyx-db
-      - redis
+  onyx-api:
+    image: onyxdotapp/onyx-backend:latest
+    depends_on: [onyx-db, redis]
     environment:
       - POSTGRES_HOST=onyx-db
       - REDIS_HOST=redis
 
-  # --- AUTOMATION & SCRAPING ---
+  onyx-web:
+    image: onyxdotapp/onyx-web:latest
+    depends_on: [onyx-api]
+    environment:
+      - API_SERVER_HOST=onyx-api
+
+  onyx-background:
+    image: onyxdotapp/onyx-backend:latest
+    command: python /app/onyx/background/worker.py
+    depends_on: [onyx-api]
+    environment:
+      - POSTGRES_HOST=onyx-db
+      - REDIS_HOST=redis
+
+  # --- AUTOMATION & SEARCH ---
   n8n:
     image: n8nio/n8n:latest
     restart: always
-    environment:
-      - N8N_SECURE_COOKIE=false
     volumes:
       - ./n8n/data:/home/node/.n8n
 
@@ -45,27 +55,24 @@ services:
     image: searxng/searxng:latest
     restart: always
     volumes:
-      - ./searxng/settings.yml:/etc/searxng/settings.yml
+      - ./searxng/settings.yml:/etc/searxng/settings.yml:ro
 
   firecrawl:
     image: firecrawl/firecrawl:latest
-    depends_on:
-      - redis
-      - searxng
+    depends_on: [redis, searxng]
     environment:
       - REDIS_URL=redis://redis:6379
 
   # --- MONITORING ---
   uptime-kuma:
     image: louislam/uptime-kuma:1
-    restart: always
     volumes:
       - ./uptime-kuma/data:/app/data
 
   dozzle:
     image: amir20/dozzle:latest
-    restart: always
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+
 
 
