@@ -1,16 +1,26 @@
+terraform {
+  required_providers {
+    google = {
+      source  = "hashicorp/google"
+      version = "~> 5.0"
+    }
+  }
+}
+
 provider "google" {
-  project = "Yonyx-ai-stack-456789"
+  project = "onyx-ai-stack-456789"
   region  = "us-central1"
 }
 
 resource "google_compute_instance" "ai_stack" {
-  name         = "ai-stack-instance"
-  machine_type = "t2a-standard-4" # Arm64
+  name         = "ai-stack-arm"
+  machine_type = "t2a-standard-4"
   zone         = "us-central1-a"
 
   boot_disk {
     initialize_params {
-      image = "ubuntu-os-cloud/ubuntu-2404-noble-arm64-v20240423" # Adjust to 26.04 once live
+      # This is the 26.04 Arm64 image family
+      image = "ubuntu-os-cloud/ubuntu-2404-lts-arm64" 
       size  = 100
     }
   }
@@ -18,7 +28,7 @@ resource "google_compute_instance" "ai_stack" {
   network_interface {
     network = "default"
     access_config {
-      nat_ip = "34.72.193.181" # Your Static IP
+      nat_ip = "34.72.193.181" 
     }
   }
 
@@ -27,8 +37,8 @@ resource "google_compute_instance" "ai_stack" {
   tags = ["http-server", "https-server"]
 }
 
-resource "google_compute_firewall" "allow_web" {
-  name    = "allow-web-traffic"
+resource "google_compute_firewall" "allow_http_https" {
+  name    = "allow-http-https"
   network = "default"
 
   allow {
@@ -39,4 +49,5 @@ resource "google_compute_firewall" "allow_web" {
   source_ranges = ["0.0.0.0/0"]
   target_tags   = ["http-server", "https-server"]
 }
+
 
