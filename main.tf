@@ -1,5 +1,5 @@
 provider "google" {
-  project = "YOUR_GCP_PROJECT_ID"
+  project = "Yonyx-ai-stack-456789"
   region  = "us-central1"
 }
 
