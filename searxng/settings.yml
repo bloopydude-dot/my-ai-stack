@@ -1,5 +1,9 @@
 use_default_settings: true
 server:
-  secret_key: "change_this_to_something_random"
+  secret_key: "1q0uE_m8X6DF1N_I1eWpe-qJA2aDE4K5Izf0RXkSFss" # Generated for your stack
+  bind_address: "0.0.0.0"
 search:
   safe_search: 0
+  formats:
+    - html
+    - json
