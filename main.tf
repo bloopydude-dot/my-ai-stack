@@ -49,3 +49,4 @@ resource "google_compute_firewall" "allow_web" {
   target_tags   = ["http-server", "https-server"]
 }
 
+
