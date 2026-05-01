@@ -20,4 +20,3 @@ cd /opt/ai-stack
 
 # Start containers
 docker compose up -d
-
