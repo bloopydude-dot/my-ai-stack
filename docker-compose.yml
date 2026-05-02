@@ -1,80 +1,105 @@
 services:
-  # --- ENTRY POINT & INFRA ---
   nginx-proxy-manager:
-    image: 'jc21/nginx-proxy-manager:latest'
+    image: jc21/nginx-proxy-manager:latest
     restart: always
-    ports:
-      - '80:80'
-      - '443:443'
-      - '81:81'
-    volumes:
-      - ./npm/data:/data
-      - ./npm/letsencrypt:/etc/letsencrypt
+    ports: ["80:80", "443:443", "81:81"]
+    volumes: ["./npm/data:/data", "./npm/letsencrypt:/etc/letsencrypt"]
 
   redis:
     image: redis:7-alpine
     restart: always
 
-  # --- ONYX FULL STACK ---
-  onyx-db:
-    image: postgres:15-alpine
+  vespa:
+    image: vespaengine/vespa:8
+    restart: always
     environment:
-      - POSTGRES_PASSWORD=password
-    volumes:
-      - ./onyx/db:/var/lib/postgresql/data
+      VESPA_CONFIGSERVER_JVMARGS: "-Xms1g -Xmx2g"
+      VESPA_IGNORE_NOT_ENOUGH_MEMORY: "true"
+    ports: ["19071:19071", "8081:8080"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:19071/ApplicationStatus"]
+      interval: 30s
+      retries: 10
+
+  opensearch:
+    image: opensearchproject/opensearch:2.11.0
+    restart: always
+    environment:
+      - discovery.type=single-node
+      - DISABLE_SECURITY_PLUGIN=true
+      - OPENSEARCH_JAVA_OPTS=-Xms4g -Xmx4g
+    ports: ["9200:9200"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9200/_cluster/health"]
+      interval: 20s
+      retries: 5
+
+  onyx-db:
+    image: postgres:15
+    restart: always
+    environment:
+      - POSTGRES_USER=onyx
+      - POSTGRES_PASSWORD=onyx_password
+      - POSTGRES_DB=onyx
+    volumes: ["./onyx/db:/var/lib/postgresql/data"]
+
+  onyx-model-server:
+    image: onyxdotapp/onyx-model-server:latest
+    restart: always
+    ports: ["9000:9000"]
+    deploy:
+      resources: { limits: { memory: 4gb } }
 
   onyx-api:
     image: onyxdotapp/onyx-backend:latest
-    depends_on: [onyx-db, redis]
+    restart: always
+    command: /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf
+    depends_on:
+      opensearch: { condition: service_healthy }
     environment:
+      - DOCUMENT_INDEXING_ENGINE=opensearch
+      - OPENSEARCH_HOST=opensearch
+      - OPENSEARCH_PORT=9200
       - POSTGRES_HOST=onyx-db
+      - POSTGRES_USER=onyx
+      - POSTGRES_PASSWORD=onyx_password
+      - POSTGRES_DB=onyx
       - REDIS_HOST=redis
+      - MODEL_SERVER_HOST=onyx-model-server
+      - MODEL_SERVER_PORT=9000
+      - AUTH_TYPE=basic
+      - WEB_DOMAIN=http://34.72.193.181
+    volumes: ["./onyx/file_store:/home/user/danswer_file_store"]
+    ports: ["8082:8080"]
 
   onyx-web:
-    image: onyxdotapp/onyx-web:latest
+    image: onyxdotapp/onyx-web-server:latest
+    restart: always
     depends_on: [onyx-api]
     environment:
+      - INTERNAL_URL=http://onyx-api:8080
       - API_SERVER_HOST=onyx-api
+      - API_SERVER_PORT=8080
+      - WEB_DOMAIN=http://34.72.193.181
+      - VESPA_HOST=vespa
+      - VESPA_PORT=8080
+      - DOCUMENT_INDEXING_ENGINE=opensearch
+      - AUTH_TYPE=basic
+    ports: ["3000:3000"]
 
-  onyx-background:
-    image: onyxdotapp/onyx-backend:latest
-    command: python /app/onyx/background/worker.py
-    depends_on: [onyx-api]
-    environment:
-      - POSTGRES_HOST=onyx-db
-      - REDIS_HOST=redis
-
-  # --- AUTOMATION & SEARCH ---
   n8n:
     image: n8nio/n8n:latest
     restart: always
-    volumes:
-      - ./n8n/data:/home/node/.n8n
-
-  searxng:
-    image: searxng/searxng:latest
-    restart: always
-    volumes:
-      - ./searxng/settings.yml:/etc/searxng/settings.yml:ro
-
-  firecrawl:
-    image: firecrawl/firecrawl:latest
-    depends_on: [redis, searxng]
+    ports: ["5678:5678"]
     environment:
-      - REDIS_URL=redis://redis:6379
-      - SEARXNG_BASE_URL=http://searxng:8080
-
-  # --- MONITORING ---
-  uptime-kuma:
-    image: louislam/uptime-kuma:1
-    volumes:
-      - ./uptime-kuma/data:/app/data
-
-  dozzle:
-    image: amir20/dozzle:latest
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-
-
-
-
+      - DOCUMENT_INDEXING_ENGINE=opensearch
+      - OPENSEARCH_HOST=opensearch
+      - OPENSEARCH_PORT=9200
+      - VESPA_READY_TIMEOUT=300
+      - VESPA_HOST=vespa
+      - VESPA_PORT=8080
+      - VESPA_HEALTH_CHECK_URL=http://vespa:8080/state/v1/health
+      - N8N_HOST=34.72.193.181
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+    volumes: ["./n8n/data:/home/node/.n8n"]
