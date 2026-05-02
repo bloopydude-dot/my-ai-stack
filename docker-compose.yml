@@ -10,16 +10,12 @@ services:
     restart: always
 
   vespa:
-    image: vespaengine/vespa:8
+    image: vespaengine/vespa-generic-intel-x86_64:8
     restart: always
+    ports: ["8081:8080"]
     environment:
-      VESPA_CONFIGSERVER_JVMARGS: "-Xms1g -Xmx2g"
-      VESPA_IGNORE_NOT_ENOUGH_MEMORY: "true"
-    ports: ["19071:19071", "8081:8080"]
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:19071/ApplicationStatus"]
-      interval: 30s
-      retries: 10
+      - VESPA_CONFIGSERVER_JVMARGS=-Xms512m -Xmx1g
+      - VESPA_IGNORE_NOT_ENOUGH_MEMORY=true
 
   opensearch:
     image: opensearchproject/opensearch:2.11.0
@@ -47,29 +43,21 @@ services:
     image: onyxdotapp/onyx-model-server:latest
     restart: always
     ports: ["9000:9000"]
-    deploy:
-      resources: { limits: { memory: 4gb } }
 
   onyx-api:
     image: onyxdotapp/onyx-backend:latest
     restart: always
-    command: /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf
     depends_on:
       opensearch: { condition: service_healthy }
     environment:
       - DOCUMENT_INDEXING_ENGINE=opensearch
       - OPENSEARCH_HOST=opensearch
       - OPENSEARCH_PORT=9200
+      - VESPA_HOST=vespa
+      - VESPA_PORT=8080
       - POSTGRES_HOST=onyx-db
-      - POSTGRES_USER=onyx
-      - POSTGRES_PASSWORD=onyx_password
-      - POSTGRES_DB=onyx
       - REDIS_HOST=redis
-      - MODEL_SERVER_HOST=onyx-model-server
-      - MODEL_SERVER_PORT=9000
-      - AUTH_TYPE=basic
       - WEB_DOMAIN=http://34.72.193.181
-    volumes: ["./onyx/file_store:/home/user/danswer_file_store"]
     ports: ["8082:8080"]
 
   onyx-web:
@@ -81,25 +69,34 @@ services:
       - API_SERVER_HOST=onyx-api
       - API_SERVER_PORT=8080
       - WEB_DOMAIN=http://34.72.193.181
-      - VESPA_HOST=vespa
-      - VESPA_PORT=8080
-      - DOCUMENT_INDEXING_ENGINE=opensearch
-      - AUTH_TYPE=basic
     ports: ["3000:3000"]
+
+  searxng:
+    image: searxng/searxng:latest
+    restart: always
+    ports: ["8080:8080"]
 
   n8n:
     image: n8nio/n8n:latest
     restart: always
     ports: ["5678:5678"]
     environment:
-      - DOCUMENT_INDEXING_ENGINE=opensearch
-      - OPENSEARCH_HOST=opensearch
-      - OPENSEARCH_PORT=9200
-      - VESPA_READY_TIMEOUT=300
-      - VESPA_HOST=vespa
-      - VESPA_PORT=8080
-      - VESPA_HEALTH_CHECK_URL=http://vespa:8080/state/v1/health
       - N8N_HOST=34.72.193.181
-      - N8N_PORT=5678
-      - N8N_PROTOCOL=http
     volumes: ["./n8n/data:/home/node/.n8n"]
+
+  firecrawl:
+    image: mendableai/firecrawl:latest
+    restart: always
+    ports: ["3002:3002"]
+
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    restart: always
+    ports: ["3001:3001"]
+    volumes: ["./uptime-kuma:/app/data"]
+
+  dozzle:
+    image: amir20/dozzle:latest
+    restart: always
+    volumes: ["/var/run/docker.sock:/var/run/docker.sock"]
+    ports: ["8888:8080"]
